@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'message_page.dart';
 import 'profile_page.dart';
 import 'item_detail_page.dart';
@@ -26,6 +27,8 @@ class _HomePageState extends State<HomePage> {
 
   bool _isUploading = false;
   String _searchQuery = '';
+
+  User? get currentUser => FirebaseAuth.instance.currentUser;
 
   Future<void> _pickImageAndUpload() async {
     try {
@@ -132,6 +135,7 @@ class _HomePageState extends State<HomePage> {
         imageUrl: imageUrl,
         name: name,
         description: description,
+        ownerId: currentUser?.uid ?? "",
       );
 
       if (mounted) {
@@ -403,6 +407,7 @@ class _HomePageState extends State<HomePage> {
                           itemBuilder: (context, index) {
                             final data = filteredDocs[index].data()!
                                 as Map<String, dynamic>;
+                            final ownerId = (data['owner_id'] ?? '') as String;
                             return GestureDetector(
                               onTap: () async {
                                 final shouldDelete = await Navigator.push<bool>(
@@ -416,6 +421,7 @@ class _HomePageState extends State<HomePage> {
                                           data['timestamp'],
                                       documentId: filteredDocs[index].id,
                                       publicId: data['public_id'],
+                                      ownerId: ownerId,
                                     ),
                                   ),
                                 );

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'constants.dart';
+import 'firestore_service.dart';
+import 'message_page.dart';
 
 class ItemDetailPage extends StatelessWidget {
   final String imageUrl;
@@ -10,6 +13,7 @@ class ItemDetailPage extends StatelessWidget {
   final dynamic dateLost;
   final String documentId;
   final String? publicId;
+  final String ownerId;
 
   const ItemDetailPage({
     super.key,
@@ -19,6 +23,7 @@ class ItemDetailPage extends StatelessWidget {
     required this.dateLost,
     required this.documentId,
     this.publicId,
+    required this.ownerId,
   });
 
   String _formatDetailDate(dynamic timestamp) {
@@ -38,6 +43,44 @@ class ItemDetailPage extends StatelessWidget {
     }
 
     return DateFormat('EEEE, MMMM dd, yyyy\nhh:mm a').format(dateTime);
+  }
+
+  Future<void> _openChat(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('You must be logged in to contact the owner'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    if (ownerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No owner is associated with this item.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    if (currentUser.uid == ownerId) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('You can\'t contact yourself!'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    final chatId =
+        await FirestoreService.getOrCreateChatId(currentUser.uid, ownerId);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MessagePage(
+          initialChatId: chatId,
+          peerUserId: ownerId,
+          peerItemName: name,
+        ),
+      ),
+    );
   }
 
   void _showDeleteConfirmation(BuildContext context) {
@@ -68,6 +111,7 @@ class ItemDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
     return Scaffold(
       backgroundColor: kPrimaryColor,
       appBar: AppBar(
@@ -220,14 +264,9 @@ class ItemDetailPage extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Contact functionality coming soon!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                },
+                onPressed: (ownerId.isEmpty || (currentUser?.uid == ownerId))
+                    ? null
+                    : () => _openChat(context),
                 icon: const Icon(Icons.contact_phone),
                 label: const Text('Contact'),
                 style: ElevatedButton.styleFrom(
