@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'constants.dart';
-import 'messages_page.dart'; // <-- ADD THIS IMPORT
+import 'messages_page.dart';
 
 class ItemDetailPage extends StatelessWidget {
   final String imageUrl;
@@ -24,7 +25,6 @@ class ItemDetailPage extends StatelessWidget {
 
   String _formatDetailDate(dynamic timestamp) {
     if (timestamp == null) return 'Unknown date';
-
     DateTime dateTime;
     if (timestamp is Timestamp) {
       dateTime = timestamp.toDate();
@@ -37,8 +37,93 @@ class ItemDetailPage extends StatelessWidget {
     } else {
       return 'Unknown date';
     }
-
     return DateFormat('EEEE, MMMM dd, yyyy\nhh:mm a').format(dateTime);
+  }
+
+  Future<String> _getUsername(String uid) async {
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      final data = userDoc.data();
+      return data?['username'] ?? "User";
+    }
+    return "User";
+  }
+
+  Future<void> _goToMessages(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You must be logged in to chat")),
+      );
+      return;
+    }
+
+    final itemDoc = await FirebaseFirestore.instance
+        .collection('items')
+        .doc(documentId)
+        .get();
+    if (!itemDoc.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Item not found")),
+      );
+      return;
+    }
+    final itemData = itemDoc.data();
+    final ownerId = itemData?['owner'];
+
+    if (ownerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Item owner not found")),
+      );
+      return;
+    }
+
+    final myUid = currentUser.uid;
+    final participantIds = [myUid, ownerId]..sort();
+
+    // Try to find existing chat
+    final chatQuery = await FirebaseFirestore.instance
+        .collection('chats')
+        .where('itemId', isEqualTo: documentId)
+        .where('participants', arrayContains: myUid)
+        .get();
+
+    String? chatId;
+
+    for (var doc in chatQuery.docs) {
+      final participants = List<String>.from(doc['participants'] ?? []);
+      if (participants.length == participantIds.length &&
+          participants.toSet().containsAll(participantIds)) {
+        chatId = doc.id;
+        break;
+      }
+    }
+
+    if (chatId == null) {
+      final chatDoc = await FirebaseFirestore.instance.collection('chats').add({
+        'itemId': documentId,
+        'itemName': name,
+        'participants': participantIds,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+      chatId = chatDoc.id;
+    }
+
+    // Find the name of the OTHER user (not me)
+    String otherUid = (ownerId == myUid)
+        ? participantIds.firstWhere((id) => id != myUid, orElse: () => myUid)
+        : ownerId;
+    String otherUserName = await _getUsername(otherUid);
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MessagesPage(
+          chatId: chatId!,
+          otherUserName: otherUserName,
+        ),
+      ),
+    );
   }
 
   void _showDeleteConfirmation(BuildContext context) {
@@ -63,17 +148,6 @@ class ItemDetailPage extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _goToMessages(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MessagesPage(
-          initialChatName: name,
-          initialMessage: "Hi, I found this item: $name",
-        ),
       ),
     );
   }

@@ -1,76 +1,145 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firestore_service.dart';
 
-class MessagesPage extends StatefulWidget {
-  final String? initialChatName;
-  final String? initialMessage;
+class MessagesPage extends StatelessWidget {
+  final String? chatId;
+  final String? otherUserName;
 
-  const MessagesPage({Key? key, this.initialChatName, this.initialMessage})
+  const MessagesPage({Key? key, this.chatId, this.otherUserName})
       : super(key: key);
 
   @override
-  State<MessagesPage> createState() => _MessagesPageState();
-}
-
-class _MessagesPageState extends State<MessagesPage> {
-  final List<Map<String, String>> _chats = [];
-
-  @override
-  void initState() {
-    super.initState();
-    // If an initial chat is provided, add it.
-    if (widget.initialChatName != null && widget.initialMessage != null) {
-      _chats.add({
-        'name': widget.initialChatName!,
-        'message': widget.initialMessage!,
-      });
+  Widget build(BuildContext context) {
+    if (chatId != null && otherUserName != null) {
+      // Show individual chat
+      return ChatScreen(chatId: chatId!, otherUserName: otherUserName!);
+    } else {
+      // Show chat list for current user
+      return const ChatListScreen();
     }
   }
+}
 
-  void _addNewChat(String name, String message) {
-    setState(() {
-      _chats.add({'name': name, 'message': message});
-    });
-  }
+class ChatListScreen extends StatelessWidget {
+  const ChatListScreen({Key? key}) : super(key: key);
 
-  void _showNewChatDialog() {
-    final nameController = TextEditingController();
-    final messageController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Chat'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Chat Name'),
-            ),
-            TextField(
-              controller: messageController,
-              decoration: const InputDecoration(labelText: 'First Message'),
-            ),
-          ],
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0B2A92),
+        body: Center(
+          child: Text("You must be logged in to see messages",
+              style: TextStyle(color: Colors.white)),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.trim().isNotEmpty) {
-                _addNewChat(
-                    nameController.text.trim(), messageController.text.trim());
-                Navigator.pop(context);
-              }
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF0B2A92),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0B2A92),
+        title: const Text('Messages', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirestoreService.getUserChatsStream(currentUser.uid),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+                child: CircularProgressIndicator(color: Colors.white));
+          }
+          final chats = snapshot.data!.docs;
+          if (chats.isEmpty) {
+            return const Center(
+              child: Text(
+                "No conversations yet.",
+                style: TextStyle(color: Colors.white70, fontSize: 18),
+              ),
+            );
+          }
+          return ListView.builder(
+            itemCount: chats.length,
+            itemBuilder: (context, index) {
+              final chat = chats[index];
+              final participants = List<String>.from(chat['participants']);
+              final chatId = chat.id;
+              final currentUid = currentUser.uid;
+              final otherUid = participants.firstWhere(
+                  (uid) => uid != currentUid,
+                  orElse: () => currentUid);
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(otherUid)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  String title = "Chat";
+                  if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                    title =
+                        userSnapshot.data!['username'] ?? "Chat with $otherUid";
+                  }
+                  return ListTile(
+                    leading: const Icon(Icons.chat, color: Colors.white),
+                    title: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    subtitle: Text(
+                      chat['itemName'] ?? "",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MessagesPage(
+                            chatId: chatId,
+                            otherUserName: title,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
             },
-            child: const Text('Add'),
-          ),
-        ],
+          );
+        },
       ),
     );
+  }
+}
+
+class ChatScreen extends StatefulWidget {
+  final String chatId;
+  final String otherUserName;
+
+  const ChatScreen(
+      {Key? key, required this.chatId, required this.otherUserName})
+      : super(key: key);
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final TextEditingController _controller = TextEditingController();
+  final User? currentUser = FirebaseAuth.instance.currentUser;
+
+  void _sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || currentUser == null) return;
+    await FirestoreService.sendMessage(
+      chatId: widget.chatId,
+      senderId: currentUser!.uid,
+      text: text,
+    );
+    _controller.clear();
   }
 
   @override
@@ -79,40 +148,89 @@ class _MessagesPageState extends State<MessagesPage> {
       backgroundColor: const Color(0xFF0B2A92),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B2A92),
-        title: const Text('Messages', style: TextStyle(color: Colors.white)),
+        title: Text(
+          widget.otherUserName,
+          style: const TextStyle(color: Colors.white),
+        ),
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showNewChatDialog,
-          ),
-        ],
       ),
-      body: _chats.isEmpty
-          ? const Center(
-              child: Text(
-                'No messages yet!',
-                style: TextStyle(color: Colors.white70, fontSize: 18),
-              ),
-            )
-          : ListView.builder(
-              itemCount: _chats.length,
-              itemBuilder: (context, index) {
-                final chat = _chats[index];
-                return Card(
-                  color: Colors.white.withOpacity(0.05),
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: ListTile(
-                    title: Text(chat['name'] ?? '',
-                        style: const TextStyle(color: Colors.white)),
-                    subtitle: Text(chat['message'] ?? '',
-                        style: const TextStyle(color: Colors.white70)),
-                    leading: const Icon(Icons.chat, color: Colors.white),
-                  ),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirestoreService.getMessagesStream(widget.chatId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No messages yet!',
+                      style: TextStyle(color: Colors.white70, fontSize: 18),
+                    ),
+                  );
+                }
+                final messages = snapshot.data!.docs;
+                return ListView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final data = messages[index].data() as Map<String, dynamic>;
+                    final isMe = data['senderId'] == currentUser?.uid;
+                    return Align(
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isMe ? Colors.white : Colors.white24,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          data['text'] ?? '',
+                          style: TextStyle(
+                            color:
+                                isMe ? const Color(0xFF0B2A92) : Colors.white,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
+          ),
+          SafeArea(
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: 'Type a message...',
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: Color(0xFF0B2A92)),
+                    onPressed: _sendMessage,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
