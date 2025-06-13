@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -14,30 +15,295 @@ import 'messages_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
+  int _unreadCount = 0;
+  List<Map<String, dynamic>> _notifications = [];
+  StreamSubscription<QuerySnapshot>? _chatSubscription;
+  StreamSubscription<QuerySnapshot>? _itemsSubscription;
+  final Map<String, StreamSubscription<QuerySnapshot>>
+      _chatMessageSubscriptions = {};
 
-  final List<Widget> _pages = [
-    const ItemsPage(),
-    const MessagesPage(),
-    const ProfilePage(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _setupUnreadListener();
+    _setupItemListener();
+  }
+
+  @override
+  void dispose() {
+    _chatSubscription?.cancel();
+    for (final sub in _chatMessageSubscriptions.values) {
+      sub.cancel();
+    }
+    _chatMessageSubscriptions.clear();
+    _itemsSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _setupUnreadListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _chatSubscription?.cancel();
+    for (final sub in _chatMessageSubscriptions.values) {
+      sub.cancel();
+    }
+    _chatMessageSubscriptions.clear();
+
+    _chatSubscription = FirebaseFirestore.instance
+        .collection('chats')
+        .where('participants', arrayContains: user.uid)
+        .snapshots()
+        .listen((chatSnapshot) {
+      int totalUnread = 0;
+      final now = DateTime.now();
+      final Map<String, int> chatUnreadCounts = {};
+
+      if (chatSnapshot.docs.isEmpty) {
+        setState(() {
+          _unreadCount = 0;
+        });
+        return;
+      }
+
+      for (final chatDoc in chatSnapshot.docs) {
+        final chatId = chatDoc.id;
+        _chatMessageSubscriptions[chatId]?.cancel();
+        _chatMessageSubscriptions[chatId] = chatDoc.reference
+            .collection('messages')
+            .orderBy('timestamp', descending: true)
+            .limit(10)
+            .snapshots()
+            .listen((msgSnapshot) {
+          int chatUnread = 0;
+          for (final msgDoc in msgSnapshot.docs) {
+            final msg = msgDoc.data();
+            if (msg['senderId'] != user.uid) {
+              final ts = msg['timestamp'];
+              DateTime? msgTime;
+              if (ts is Timestamp) {
+                msgTime = ts.toDate();
+              } else if (ts is String) {
+                msgTime = DateTime.tryParse(ts);
+              }
+              if (msgTime != null && now.difference(msgTime).inDays < 2) {
+                chatUnread += 1;
+                _addNotification(
+                  type: 'message',
+                  title: 'New message',
+                  content: msg['text'] ?? 'You have a new message.',
+                  timestamp: msgTime,
+                  chatId: chatId,
+                  itemId: chatDoc['itemId'],
+                );
+              }
+            }
+          }
+          chatUnreadCounts[chatId] = chatUnread;
+          setState(() {
+            _unreadCount = chatUnreadCounts.values.fold(0, (a, b) => a + b);
+          });
+        });
+      }
+    });
+  }
+
+  void _setupItemListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _itemsSubscription = FirebaseFirestore.instance
+        .collection('items')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final timestamp = data['timestamp'] is Timestamp
+            ? data['timestamp'].toDate()
+            : DateTime.tryParse(data['timestamp'] ?? '');
+        final alreadyExists = _notifications
+            .any((n) => n['type'] == 'item' && n['itemId'] == doc.id);
+        if (!alreadyExists && data['owner'] != user.uid) {
+          _addNotification(
+            type: 'item',
+            title: 'New item posted',
+            content: data['name'] ?? 'A new item has been posted.',
+            timestamp: timestamp ?? DateTime.now(),
+            itemId: doc.id,
+          );
+        }
+      }
+    });
+  }
+
+  void _addNotification({
+    required String type,
+    required String title,
+    required String content,
+    required DateTime timestamp,
+    String? chatId,
+    String? itemId,
+  }) {
+    final notif = {
+      'type': type,
+      'title': title,
+      'content': content,
+      'timestamp': timestamp,
+      'chatId': chatId,
+      'itemId': itemId,
+    };
+    final same = _notifications.any((n) =>
+        n['type'] == type &&
+        n['chatId'] == chatId &&
+        n['itemId'] == itemId &&
+        n['content'] == content);
+    if (!same) {
+      setState(() {
+        _notifications.insert(0, notif);
+      });
+    }
+  }
+
+  Future<void> _onNotificationTap(Map<String, dynamic> notif) async {
+    if (notif['type'] == 'item' && notif['itemId'] != null) {
+      final doc = await FirebaseFirestore.instance
+          .collection('items')
+          .doc(notif['itemId'])
+          .get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        if (!mounted) return;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ItemDetailPage(
+            imageUrl: data['image'] ?? '',
+            name: data['name'] ?? 'Unknown Item',
+            description: data['description'] ?? '',
+            dateLost: data['date_lost'] ?? data['timestamp'],
+            documentId: notif['itemId'],
+            publicId: data['public_id'],
+          ),
+        ));
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Item not found')));
+      }
+    } else if (notif['type'] == 'message' && notif['chatId'] != null) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => MessagesPage(
+          chatId: notif['chatId'],
+          otherUserName: '', // Optionally fetch username
+        ),
+      ));
+    }
+  }
+
+  void _showNotificationsPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Center(
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            constraints: const BoxConstraints(maxHeight: 450),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.98),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Notifications',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                ),
+                const Divider(),
+                Expanded(
+                  child: _notifications.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No notifications yet.',
+                            style: TextStyle(color: Colors.black54),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _notifications.length,
+                          itemBuilder: (context, idx) {
+                            final notif = _notifications[idx];
+                            return ListTile(
+                              leading: notif['type'] == 'item'
+                                  ? const Icon(Icons.add_box,
+                                      color: Colors.blue)
+                                  : const Icon(Icons.message,
+                                      color: Colors.green),
+                              title: Text(notif['title'] ?? ''),
+                              subtitle: Text(notif['content'] ?? ''),
+                              trailing: Text(
+                                notif['timestamp'] is DateTime
+                                    ? DateFormat('MMM d, h:mm a')
+                                        .format(notif['timestamp'])
+                                    : '',
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.black54),
+                              ),
+                              onTap: () async {
+                                Navigator.of(context).pop();
+                                await _onNotificationTap(notif);
+                              },
+                            );
+                          },
+                        ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _notifications.clear();
+                    });
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Clear All',
+                      style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   void _onItemTapped(int index) {
     setState(() {
       _currentIndex = index;
+      if (index == 1) {
+        setState(() {
+          _unreadCount = 0;
+        });
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: [
+        ItemsPage(
+          unreadCount: _unreadCount,
+          notifications: _notifications,
+          onNotificationBellTap: () => _showNotificationsPopup(context),
+        ),
+        const MessagesPage(),
+        const ProfilePage(),
+      ][_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
@@ -45,16 +311,45 @@ class _HomePageState extends State<HomePage> {
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white60,
         type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.message),
+            icon: Stack(
+              children: [
+                const Icon(Icons.message),
+                if (_unreadCount > 0)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        _unreadCount > 99 ? '99+' : '$_unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             label: 'Messages',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.person),
             label: 'Profile',
           ),
@@ -65,7 +360,15 @@ class _HomePageState extends State<HomePage> {
 }
 
 class ItemsPage extends StatefulWidget {
-  const ItemsPage({super.key});
+  final int unreadCount;
+  final List<Map<String, dynamic>> notifications;
+  final VoidCallback onNotificationBellTap;
+  const ItemsPage({
+    super.key,
+    required this.unreadCount,
+    required this.notifications,
+    required this.onNotificationBellTap,
+  });
 
   @override
   State<ItemsPage> createState() => _ItemsPageState();
@@ -259,7 +562,6 @@ class _ItemsPageState extends State<ItemsPage> {
         );
       }
     } catch (e) {
-      // Detect permission error (Firestore throws a permission-denied error)
       if (e.toString().toLowerCase().contains('permission-denied')) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -316,6 +618,7 @@ class _ItemsPageState extends State<ItemsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = widget.unreadCount;
     return Stack(
       children: [
         Scaffold(
@@ -378,8 +681,45 @@ class _ItemsPageState extends State<ItemsPage> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      const Icon(Icons.notifications_none,
-                          color: Colors.white, size: 28),
+                      GestureDetector(
+                        onTap: widget.onNotificationBellTap,
+                        child: Stack(
+                          children: [
+                            const Icon(Icons.notifications_none,
+                                color: Colors.white, size: 28),
+                            if (unreadCount > 0 ||
+                                widget.notifications.isNotEmpty)
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
+                                  child: Text(
+                                    (unreadCount +
+                                                widget.notifications.length) >
+                                            99
+                                        ? '99+'
+                                        : '${unreadCount + widget.notifications.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
