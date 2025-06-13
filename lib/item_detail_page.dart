@@ -193,9 +193,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       _loading = true;
     });
 
-    final FirebaseFirestore firestore = FirebaseFirestore.instance;
-    final batch = firestore.batch();
-
+    final firestore = FirebaseFirestore.instance;
     final claimedData = {
       'image': widget.imageUrl,
       'name': widget.name,
@@ -217,20 +215,37 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
         .collection('items')
         .doc(widget.documentId);
 
-    // Set claimed info in user's claimed_items
-    batch.set(userClaimedItemRef, claimedData);
-
-    // Set claimed true in global collection
-    batch.update(itemRef, {'claimed': true});
-
-    // Set claimed true in user's items subcollection (if exists)
-    batch.update(userItemRef, {'claimed': true});
-
     try {
-      await batch.commit();
+      // Step 1: Save claimed info
+      await userClaimedItemRef.set(claimedData);
+
+      // Step 2: Find all chats for this item
+      final chatsQuery = await firestore
+          .collection('chats')
+          .where('itemId', isEqualTo: widget.documentId)
+          .get();
+
+      // Step 3: Delete all chats and their messages for this item
+      for (var chatDoc in chatsQuery.docs) {
+        // Delete all messages in subcollection
+        final messagesSnapshot =
+            await chatDoc.reference.collection('messages').get();
+        for (var msg in messagesSnapshot.docs) {
+          await msg.reference.delete();
+        }
+        // Delete the chat itself
+        await chatDoc.reference.delete();
+      }
+
+      // Step 4: Delete the item from global and user subcollection
+      await itemRef.delete();
+      await userItemRef.delete();
+
       setState(() {
         _isClaimed = true;
+        _loading = false;
       });
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const ProfilePage()),
@@ -241,7 +256,7 @@ class _ItemDetailPageState extends State<ItemDetailPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Error marking item as found: $e"),
+          content: Text("Error completing item found: $e"),
           backgroundColor: Colors.red,
         ),
       );
