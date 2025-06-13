@@ -379,53 +379,105 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildClaimedItemsBanner() {
+  Widget _buildClaimedItemsList() {
     if (_claimedItems.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.13),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green, width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Item Retrieved / Item Claimed",
-            style: TextStyle(
-              color: Colors.green,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "Claimed Items",
+              style: TextStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ),
-          ..._claimedItems.map((item) {
-            return ListTile(
-              leading: item['image'] != null && item['image'] != ''
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(item['image'],
-                          width: 48, height: 48, fit: BoxFit.cover),
-                    )
-                  : const Icon(Icons.inventory, size: 48, color: Colors.green),
-              title: Text(
-                item['name'] ?? '',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                item['dateClaimed'] != null
-                    ? DateFormat('MMM dd, yyyy - hh:mm a')
-                        .format(DateTime.parse(item['dateClaimed']))
-                    : '',
-                style: const TextStyle(color: Colors.white70),
-              ),
-            );
-          }).toList(),
-        ],
-      ),
+        ),
+        ..._claimedItems.map((item) {
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.13),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green, width: 2),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                item['image'] != null && item['image'] != ''
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          item['image'],
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                            width: 64,
+                            height: 64,
+                            color: Colors.green.withOpacity(0.12),
+                            child: const Icon(Icons.inventory,
+                                color: Colors.green, size: 32),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.inventory,
+                            color: Colors.green, size: 32),
+                      ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['name'] ?? '',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item['dateClaimed'] != null
+                            ? DateFormat('MMM dd, yyyy - hh:mm a')
+                                .format(DateTime.parse(item['dateClaimed']))
+                            : '',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "Item Retrieved / Claimed",
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
     );
   }
 
@@ -456,7 +508,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   const SizedBox(height: 32),
                   _buildProfileHeader(),
-                  _buildClaimedItemsBanner(),
+                  const SizedBox(height: 20),
+                  _buildClaimedItemsList(),
                   const SizedBox(height: 32),
                   _buildProfileForm(),
                 ],
