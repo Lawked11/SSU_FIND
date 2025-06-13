@@ -13,10 +13,8 @@ class MessagesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (chatId != null && otherUserName != null) {
-      // Show individual chat
       return ChatScreen(chatId: chatId!, otherUserName: otherUserName!);
     } else {
-      // Show chat list for current user
       return const ChatListScreen();
     }
   }
@@ -48,9 +46,18 @@ class ChatListScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirestoreService.getUserChatsStream(currentUser.uid),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Error: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+              ),
+            );
+          }
           if (!snapshot.hasData) {
             return const Center(
-                child: CircularProgressIndicator(color: Colors.white));
+              child: CircularProgressIndicator(color: Colors.white),
+            );
           }
           final chats = snapshot.data!.docs;
           if (chats.isEmpty) {
@@ -72,26 +79,67 @@ class ChatListScreen extends StatelessWidget {
                   (uid) => uid != currentUid,
                   orElse: () => currentUid);
 
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(otherUid)
-                    .get(),
-                builder: (context, userSnapshot) {
+              // Fetch both user and item info for chat tile
+              return FutureBuilder<List<dynamic>>(
+                future: Future.wait([
+                  FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(otherUid)
+                      .get(),
+                  (chat['itemId'] != null &&
+                          chat['itemId'].toString().isNotEmpty)
+                      ? FirebaseFirestore.instance
+                          .collection('items')
+                          .doc(chat['itemId'])
+                          .get()
+                      : Future.value(null),
+                ]),
+                builder: (context, userItemSnap) {
                   String title = "Chat";
-                  if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                    title =
-                        userSnapshot.data!['username'] ?? "Chat with $otherUid";
+                  String itemName = chat['itemName'] ?? '';
+                  String? itemImageUrl;
+                  if (userItemSnap.hasData && userItemSnap.data != null) {
+                    final userSnap = userItemSnap.data![0] as DocumentSnapshot?;
+                    final itemSnap = userItemSnap.data![1] as DocumentSnapshot?;
+                    if (userSnap != null && userSnap.exists) {
+                      final userData = userSnap.data() as Map<String, dynamic>;
+                      // Defensive for username
+                      title = userData['username'] ?? "Chat with $otherUid";
+                    }
+                    if (itemSnap != null && itemSnap.exists) {
+                      final data = itemSnap.data() as Map<String, dynamic>;
+                      itemName = data['name'] ?? itemName;
+                      itemImageUrl = data['image'];
+                    }
                   }
                   return ListTile(
-                    leading: const Icon(Icons.chat, color: Colors.white),
+                    leading: itemImageUrl != null
+                        ? CircleAvatar(
+                            backgroundImage: NetworkImage(itemImageUrl),
+                            backgroundColor: Colors.white24,
+                          )
+                        : const CircleAvatar(
+                            backgroundColor: Colors.white24,
+                            child: Icon(Icons.chat, color: Colors.white),
+                          ),
                     title: Text(
                       title,
                       style: const TextStyle(color: Colors.white),
                     ),
-                    subtitle: Text(
-                      chat['itemName'] ?? "",
-                      style: const TextStyle(color: Colors.white70),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (itemName.isNotEmpty)
+                          Text(
+                            itemName,
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        const Text(
+                          "Contact",
+                          style: TextStyle(
+                              color: Colors.lightBlueAccent, fontSize: 12),
+                        ),
+                      ],
                     ),
                     onTap: () {
                       Navigator.push(
@@ -160,6 +208,14 @@ class _ChatScreenState extends State<ChatScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirestoreService.getMessagesStream(widget.chatId),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error: ${snapshot.error}',
+                      style: const TextStyle(color: Colors.red, fontSize: 16),
+                    ),
+                  );
+                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(color: Colors.white),
