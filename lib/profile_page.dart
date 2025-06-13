@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,10 +26,13 @@ class _ProfilePageState extends State<ProfilePage> {
   String _email = '';
   String _profileImageUrl = '';
 
+  List<Map<String, dynamic>> _claimedItems = [];
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadClaimedItems();
   }
 
   Future<void> _loadUserData() async {
@@ -68,6 +72,22 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _loadClaimedItems() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('claimed_items')
+        .get();
+    setState(() {
+      _claimedItems = snapshot.docs
+          .map((doc) => doc.data())
+          .toList()
+          .cast<Map<String, dynamic>>();
+    });
   }
 
   Future<void> _createUserDocument(User user) async {
@@ -115,6 +135,7 @@ class _ProfilePageState extends State<ProfilePage> {
             backgroundColor: Colors.green,
           ),
         );
+        await _loadClaimedItems(); // refresh claimed items after save
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -358,6 +379,56 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Widget _buildClaimedItemsBanner() {
+    if (_claimedItems.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.13),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Item Retrieved / Item Claimed",
+            style: TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          ..._claimedItems.map((item) {
+            return ListTile(
+              leading: item['image'] != null && item['image'] != ''
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(item['image'],
+                          width: 48, height: 48, fit: BoxFit.cover),
+                    )
+                  : const Icon(Icons.inventory, size: 48, color: Colors.green),
+              title: Text(
+                item['name'] ?? '',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                item['dateClaimed'] != null
+                    ? DateFormat('MMM dd, yyyy - hh:mm a')
+                        .format(DateTime.parse(item['dateClaimed']))
+                    : '',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -385,6 +456,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   const SizedBox(height: 32),
                   _buildProfileHeader(),
+                  _buildClaimedItemsBanner(),
                   const SizedBox(height: 32),
                   _buildProfileForm(),
                 ],
