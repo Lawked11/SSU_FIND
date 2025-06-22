@@ -176,19 +176,21 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader(double screenWidth) {
+    final isWide = screenWidth > 600;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         CircleAvatar(
-          radius: 60,
+          radius: isWide ? 80 : 60,
           backgroundColor: Colors.white.withOpacity(0.2),
           backgroundImage: _profileImageUrl.isNotEmpty
               ? NetworkImage(_profileImageUrl)
               : null,
           child: _profileImageUrl.isEmpty
-              ? const Icon(
+              ? Icon(
                   Icons.person,
-                  size: 60,
+                  size: isWide ? 80 : 60,
                   color: Colors.white,
                 )
               : null,
@@ -198,14 +200,17 @@ class _ProfilePageState extends State<ProfilePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              '${_firstName.isNotEmpty ? _firstName : 'First Name'} ${_lastName.isNotEmpty ? _lastName : 'Last Name'}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            Flexible(
+              child: Text(
+                '${_firstName.isNotEmpty ? _firstName : 'First Name'} ${_lastName.isNotEmpty ? _lastName : 'Last Name'}',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: isWide ? 32 : 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(width: 8),
             GestureDetector(
@@ -245,12 +250,13 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildProfileForm() {
+  Widget _buildProfileForm(double screenWidth) {
     if (!_isEditing) return const SizedBox.shrink();
 
+    final isWide = screenWidth > 600;
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
+      margin: EdgeInsets.all(isWide ? 32 : 16),
+      padding: EdgeInsets.all(isWide ? 28 : 20),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.13),
         borderRadius: BorderRadius.circular(16),
@@ -259,11 +265,11 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Edit Profile Information',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: isWide ? 22 : 18,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -379,13 +385,17 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildClaimedItemsList() {
+  Widget _buildClaimedItemsList(double screenWidth) {
     if (_claimedItems.isEmpty) return const SizedBox.shrink();
+
+    final isWide = screenWidth > 600;
+    final imgSize = isWide ? 80.0 : 64.0;
 
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+        Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: isWide ? 32.0 : 16.0, vertical: 8),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -393,7 +403,7 @@ class _ProfilePageState extends State<ProfilePage> {
               style: TextStyle(
                 color: Colors.green,
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
+                fontSize: isWide ? 22 : 18,
               ),
             ),
           ),
@@ -401,8 +411,9 @@ class _ProfilePageState extends State<ProfilePage> {
         ..._claimedItems.map((item) {
           return Container(
             width: double.infinity,
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            padding: const EdgeInsets.all(12),
+            margin:
+                EdgeInsets.symmetric(horizontal: isWide ? 32 : 16, vertical: 8),
+            padding: EdgeInsets.all(isWide ? 18 : 12),
             decoration: BoxDecoration(
               color: Colors.green.withOpacity(0.13),
               borderRadius: BorderRadius.circular(12),
@@ -416,28 +427,28 @@ class _ProfilePageState extends State<ProfilePage> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
                           item['image'],
-                          width: 64,
-                          height: 64,
+                          width: imgSize,
+                          height: imgSize,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) =>
                               Container(
-                            width: 64,
-                            height: 64,
+                            width: imgSize,
+                            height: imgSize,
                             color: Colors.green.withOpacity(0.12),
-                            child: const Icon(Icons.inventory,
-                                color: Colors.green, size: 32),
+                            child: Icon(Icons.inventory,
+                                color: Colors.green, size: imgSize / 2),
                           ),
                         ),
                       )
                     : Container(
-                        width: 64,
-                        height: 64,
+                        width: imgSize,
+                        height: imgSize,
                         decoration: BoxDecoration(
                           color: Colors.green.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.inventory,
-                            color: Colors.green, size: 32),
+                        child: Icon(Icons.inventory,
+                            color: Colors.green, size: imgSize / 2),
                       ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -446,10 +457,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       Text(
                         item['name'] ?? '',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                          fontSize: isWide ? 18 : 16,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -462,12 +473,12 @@ class _ProfilePageState extends State<ProfilePage> {
                             color: Colors.white70, fontSize: 14),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         "Item Retrieved / Claimed",
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                          fontSize: isWide ? 15 : 13,
                         ),
                       ),
                     ],
@@ -483,6 +494,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxPageWidth = screenWidth > 800 ? 600.0 : double.infinity;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0B2A92),
       appBar: AppBar(
@@ -503,16 +517,21 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 32),
-                  _buildProfileHeader(),
-                  const SizedBox(height: 20),
-                  _buildClaimedItemsList(),
-                  const SizedBox(height: 32),
-                  _buildProfileForm(),
-                ],
+          : Center(
+              child: SingleChildScrollView(
+                child: Container(
+                  width: maxPageWidth,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 32),
+                      _buildProfileHeader(screenWidth),
+                      const SizedBox(height: 20),
+                      _buildClaimedItemsList(screenWidth),
+                      const SizedBox(height: 32),
+                      _buildProfileForm(screenWidth),
+                    ],
+                  ),
+                ),
               ),
             ),
     );

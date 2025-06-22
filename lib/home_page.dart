@@ -211,69 +211,74 @@ class _HomePageState extends State<HomePage> {
       builder: (_) => Dialog(
         backgroundColor: Colors.transparent,
         child: Center(
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.85,
-            constraints: const BoxConstraints(maxHeight: 450),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.98),
-              borderRadius: BorderRadius.circular(18),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 400, // fixes size for desktop
+              maxHeight: 500,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Notifications',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-                ),
-                const Divider(),
-                Expanded(
-                  child: _notifications.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No notifications yet.',
-                            style: TextStyle(color: Colors.black54),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.98),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Notifications',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: _notifications.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No notifications yet.',
+                              style: TextStyle(color: Colors.black54),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: _notifications.length,
+                            itemBuilder: (context, idx) {
+                              final notif = _notifications[idx];
+                              return ListTile(
+                                leading: notif['type'] == 'item'
+                                    ? const Icon(Icons.add_box,
+                                        color: Colors.blue)
+                                    : const Icon(Icons.message,
+                                        color: Colors.green),
+                                title: Text(notif['title'] ?? ''),
+                                subtitle: Text(notif['content'] ?? ''),
+                                trailing: Text(
+                                  notif['timestamp'] is DateTime
+                                      ? DateFormat('MMM d, h:mm a')
+                                          .format(notif['timestamp'])
+                                      : '',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.black54),
+                                ),
+                                onTap: () async {
+                                  Navigator.of(context).pop();
+                                  await _onNotificationTap(notif);
+                                },
+                              );
+                            },
                           ),
-                        )
-                      : ListView.builder(
-                          itemCount: _notifications.length,
-                          itemBuilder: (context, idx) {
-                            final notif = _notifications[idx];
-                            return ListTile(
-                              leading: notif['type'] == 'item'
-                                  ? const Icon(Icons.add_box,
-                                      color: Colors.blue)
-                                  : const Icon(Icons.message,
-                                      color: Colors.green),
-                              title: Text(notif['title'] ?? ''),
-                              subtitle: Text(notif['content'] ?? ''),
-                              trailing: Text(
-                                notif['timestamp'] is DateTime
-                                    ? DateFormat('MMM d, h:mm a')
-                                        .format(notif['timestamp'])
-                                    : '',
-                                style: const TextStyle(
-                                    fontSize: 11, color: Colors.black54),
-                              ),
-                              onTap: () async {
-                                Navigator.of(context).pop();
-                                await _onNotificationTap(notif);
-                              },
-                            );
-                          },
-                        ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _notifications.clear();
-                    });
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Clear All',
-                      style: TextStyle(color: Colors.red)),
-                ),
-              ],
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _notifications.clear();
+                      });
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('Clear All',
+                        style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -608,6 +613,20 @@ class _ItemsPageState extends State<ItemsPage> {
     });
   }
 
+  int _getCrossAxisCount(double width) {
+    if (width >= 1100) return 4;
+    if (width >= 700) return 3;
+    if (width >= 450) return 2;
+    return 1;
+  }
+
+  double _getMaxPageWidth(double width) {
+    // Center the grid on large screens, full width on mobile
+    if (width > 1300) return 1200;
+    if (width > 900) return 900;
+    return double.infinity;
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -619,376 +638,410 @@ class _ItemsPageState extends State<ItemsPage> {
   @override
   Widget build(BuildContext context) {
     final unreadCount = widget.unreadCount;
+
     return Stack(
       children: [
         Scaffold(
           backgroundColor: const Color(0xFF0B2A92),
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: Image.asset(
-                          'assets/images/logo.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final crossAxisCount = _getCrossAxisCount(width);
+                final maxPageWidth = _getMaxPageWidth(width);
+                return Center(
+                  child: Container(
+                    width: maxPageWidth,
+                    padding: EdgeInsets.all(width < 600 ? 8 : 32),
+                    child: Column(
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(
                               width: 80,
                               height: 80,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child:
-                                  const Icon(Icons.image, color: Colors.white),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Search items...',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: _searchQuery.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: _clearSearch,
-                                  )
-                                : null,
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 0),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              _searchQuery = value;
-                            });
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      GestureDetector(
-                        onTap: widget.onNotificationBellTap,
-                        child: Stack(
-                          children: [
-                            const Icon(Icons.notifications_none,
-                                color: Colors.white, size: 28),
-                            if (unreadCount > 0 ||
-                                widget.notifications.isNotEmpty)
-                              Positioned(
-                                right: 0,
-                                top: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  constraints: const BoxConstraints(
-                                    minWidth: 16,
-                                    minHeight: 16,
-                                  ),
-                                  child: Text(
-                                    (unreadCount +
-                                                widget.notifications.length) >
-                                            99
-                                        ? '99+'
-                                        : '${unreadCount + widget.notifications.length}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                              child: Image.asset(
+                                'assets/images/logo.png',
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                    textAlign: TextAlign.center,
+                                    child: const Icon(Icons.image,
+                                        color: Colors.white),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                decoration: InputDecoration(
+                                  hintText: 'Search items...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: _clearSearch,
+                                        )
+                                      : null,
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(vertical: 0),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                  });
+                                },
                               ),
+                            ),
+                            const SizedBox(width: 16),
+                            GestureDetector(
+                              onTap: widget.onNotificationBellTap,
+                              child: Stack(
+                                children: [
+                                  const Icon(Icons.notifications_none,
+                                      color: Colors.white, size: 28),
+                                  if (unreadCount > 0 ||
+                                      widget.notifications.isNotEmpty)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 16,
+                                        ),
+                                        child: Text(
+                                          (unreadCount +
+                                                      widget.notifications
+                                                          .length) >
+                                                  99
+                                              ? '99+'
+                                              : '${unreadCount + widget.notifications.length}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  if (_searchQuery.isNotEmpty)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.search,
-                              color: Colors.white70, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Searching for: "$_searchQuery"',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
+                        const SizedBox(height: 20),
+                        if (_searchQuery.isNotEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          ),
-                          const Spacer(),
-                          GestureDetector(
-                            onTap: _clearSearch,
-                            child: const Icon(
-                              Icons.close,
-                              color: Colors.white70,
-                              size: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirestoreService.getItemsStream(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return const Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.white),
-                          );
-                        }
-
-                        if (snapshot.hasError) {
-                          return Center(
-                            child: Text(
-                              'Error: ${snapshot.error}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          );
-                        }
-
-                        final allDocs = snapshot.data?.docs ?? [];
-                        final filteredDocs = _filterItems(allDocs);
-
-                        if (allDocs.isEmpty) {
-                          return const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            child: Row(
                               children: [
-                                Icon(Icons.photo_library_outlined,
-                                    color: Colors.white70, size: 64),
-                                SizedBox(height: 16),
+                                const Icon(Icons.search,
+                                    color: Colors.white70, size: 16),
+                                const SizedBox(width: 8),
                                 Text(
-                                  'No items yet!\nTap + to add your first item',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                      color: Colors.white70, fontSize: 16),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        if (filteredDocs.isEmpty && _searchQuery.isNotEmpty) {
-                          return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.search_off,
-                                    color: Colors.white70, size: 64),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No items found for "$_searchQuery"',
-                                  textAlign: TextAlign.center,
+                                  'Searching for: "$_searchQuery"',
                                   style: const TextStyle(
-                                      color: Colors.white70, fontSize: 16),
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
                                 ),
-                                const SizedBox(height: 8),
-                                TextButton(
-                                  onPressed: _clearSearch,
-                                  child: const Text(
-                                    'Clear search',
-                                    style: TextStyle(color: Colors.white),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: _clearSearch,
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white70,
+                                    size: 16,
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        }
-
-                        return GridView.builder(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 0.75,
                           ),
-                          itemCount: filteredDocs.length,
-                          itemBuilder: (context, index) {
-                            final data = filteredDocs[index].data()!
-                                as Map<String, dynamic>;
-                            final isOwner = currentUser != null &&
-                                data['owner'] == currentUser!.uid;
-                            return GestureDetector(
-                              onTap: () async {
-                                final shouldDelete = await Navigator.push<bool>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ItemDetailPage(
-                                      imageUrl: data['image'] ?? '',
-                                      name: data['name'] ?? 'Unknown Item',
-                                      description: data['description'] ?? '',
-                                      dateLost: data['date_lost'] ??
-                                          data['timestamp'],
-                                      documentId: filteredDocs[index].id,
-                                      publicId: data['public_id'],
-                                    ),
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirestoreService.getItemsStream(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white),
+                                );
+                              }
+
+                              if (snapshot.hasError) {
+                                return Center(
+                                  child: Text(
+                                    'Error: ${snapshot.error}',
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                 );
+                              }
 
-                                if (shouldDelete == true) {
-                                  await _deleteItem(
-                                    filteredDocs[index].id,
-                                    data['public_id'],
-                                    isOwner,
-                                  );
-                                }
-                              },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: ClipRRect(
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(12),
-                                          topRight: Radius.circular(12),
+                              final allDocs = snapshot.data?.docs ?? [];
+                              final filteredDocs = _filterItems(allDocs);
+
+                              if (allDocs.isEmpty) {
+                                return const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.photo_library_outlined,
+                                          color: Colors.white70, size: 64),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'No items yet!\nTap + to add your first item',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 16),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              if (filteredDocs.isEmpty &&
+                                  _searchQuery.isNotEmpty) {
+                                return Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.search_off,
+                                          color: Colors.white70, size: 64),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'No items found for "$_searchQuery"',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      TextButton(
+                                        onPressed: _clearSearch,
+                                        child: const Text(
+                                          'Clear search',
+                                          style: TextStyle(color: Colors.white),
                                         ),
-                                        child: Image.network(
-                                          data['image'] ?? '',
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          loadingBuilder: (context, child,
-                                              loadingProgress) {
-                                            if (loadingProgress == null)
-                                              return child;
-                                            return Center(
-                                              child: CircularProgressIndicator(
-                                                color: Colors.white,
-                                                value: loadingProgress
-                                                            .expectedTotalBytes !=
-                                                        null
-                                                    ? loadingProgress
-                                                            .cumulativeBytesLoaded /
-                                                        loadingProgress
-                                                            .expectedTotalBytes!
-                                                    : null,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              return GridView.builder(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  crossAxisSpacing: width < 600 ? 10 : 18,
+                                  mainAxisSpacing: width < 600 ? 10 : 18,
+                                  childAspectRatio: 0.75,
+                                ),
+                                itemCount: filteredDocs.length,
+                                itemBuilder: (context, index) {
+                                  final data = filteredDocs[index].data()!
+                                      as Map<String, dynamic>;
+                                  final isOwner = currentUser != null &&
+                                      data['owner'] == currentUser!.uid;
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      final shouldDelete =
+                                          await Navigator.push<bool>(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ItemDetailPage(
+                                            imageUrl: data['image'] ?? '',
+                                            name:
+                                                data['name'] ?? 'Unknown Item',
+                                            description:
+                                                data['description'] ?? '',
+                                            dateLost: data['date_lost'] ??
+                                                data['timestamp'],
+                                            documentId: filteredDocs[index].id,
+                                            publicId: data['public_id'],
+                                          ),
+                                        ),
+                                      );
+
+                                      if (shouldDelete == true) {
+                                        await _deleteItem(
+                                          filteredDocs[index].id,
+                                          data['public_id'],
+                                          isOwner,
+                                        );
+                                      }
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            flex: 3,
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  const BorderRadius.only(
+                                                topLeft: Radius.circular(12),
+                                                topRight: Radius.circular(12),
                                               ),
-                                            );
-                                          },
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Container(
-                                              alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                color: Colors.white
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    const BorderRadius.only(
-                                                  topLeft: Radius.circular(12),
-                                                  topRight: Radius.circular(12),
-                                                ),
+                                              child: Image.network(
+                                                data['image'] ?? '',
+                                                fit: BoxFit.cover,
+                                                width: double.infinity,
+                                                loadingBuilder: (context, child,
+                                                    loadingProgress) {
+                                                  if (loadingProgress == null)
+                                                    return child;
+                                                  return Center(
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      color: Colors.white,
+                                                      value: loadingProgress
+                                                                  .expectedTotalBytes !=
+                                                              null
+                                                          ? loadingProgress
+                                                                  .cumulativeBytesLoaded /
+                                                              loadingProgress
+                                                                  .expectedTotalBytes!
+                                                          : null,
+                                                    ),
+                                                  );
+                                                },
+                                                errorBuilder: (context, error,
+                                                    stackTrace) {
+                                                  return Container(
+                                                    alignment: Alignment.center,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          const BorderRadius
+                                                              .only(
+                                                        topLeft:
+                                                            Radius.circular(12),
+                                                        topRight:
+                                                            Radius.circular(12),
+                                                      ),
+                                                    ),
+                                                    child: const Column(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Icon(Icons.broken_image,
+                                                            color:
+                                                                Colors.white70,
+                                                            size: 32),
+                                                        Text('Failed to load',
+                                                            style: TextStyle(
+                                                                color: Colors
+                                                                    .white70)),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
                                               ),
-                                              child: const Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.all(8.0),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
-                                                  Icon(Icons.broken_image,
+                                                  Text(
+                                                    data['name'] ??
+                                                        'Unknown Item',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    data['description'] ??
+                                                        'No description',
+                                                    style: const TextStyle(
                                                       color: Colors.white70,
-                                                      size: 32),
-                                                  Text('Failed to load',
-                                                      style: TextStyle(
-                                                          color:
-                                                              Colors.white70)),
+                                                      fontSize: 12,
+                                                    ),
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  const Spacer(),
+                                                  Text(
+                                                    _formatDate(
+                                                        data['date_lost'] ??
+                                                            data['timestamp']),
+                                                    style: const TextStyle(
+                                                      color: Colors.white60,
+                                                      fontSize: 10,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
                                                 ],
                                               ),
-                                            );
-                                          },
-                                        ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              data['name'] ?? 'Unknown Item',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              data['description'] ??
-                                                  'No description',
-                                              style: const TextStyle(
-                                                color: Colors.white70,
-                                                fontSize: 12,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              _formatDate(data['date_lost'] ??
-                                                  data['timestamp']),
-                                              style: const TextStyle(
-                                                color: Colors.white60,
-                                                fontSize: 10,
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
           floatingActionButton: FloatingActionButton(

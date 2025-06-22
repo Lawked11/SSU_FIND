@@ -1,26 +1,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'login_page.dart'; // Make sure this import points to your LoginPage file
+import 'login_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Use FirebaseOptions when running on the web
   if (kIsWeb) {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
         apiKey: "AIzaSyDfuAPKb2WdK2D4jUhVPFNajNacsv0B_PA",
         authDomain: "find-74ab9.firebaseapp.com",
         projectId: "find-74ab9",
-        storageBucket: "find-74ab9.firebasestorage.app",
+        storageBucket:
+            "find-74ab9.appspot.com", // Fixed typo: .app to .appspot.com
         messagingSenderId: "589831949774",
         appId: "1:589831949774:web:81f391fe1859731177ef9f",
         measurementId: "G-NE3ECSQV54",
       ),
     );
   } else {
-    await Firebase.initializeApp(); // For mobile platforms
+    await Firebase.initializeApp();
   }
 
   runApp(const MyApp());
@@ -33,11 +33,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      initialRoute: '/', // Start at splash
+      initialRoute: '/',
       routes: {
         '/': (context) => const SplashScreen(),
-        '/login': (context) => const LoginPage(), // Add this for navigation
-        // Add other routes here (e.g., '/home': (context) => HomePage(), etc.)
+        '/login': (context) => const LoginPage(),
+        // '/home': (context) => const HomePage(), // Add if HomePage is defined
       },
     );
   }
@@ -61,12 +61,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF000B8C),
+    // Responsive logo sizing
+    final width = MediaQuery.of(context).size.width;
+    double logoHeight = width < 600 ? 180 : 260;
+    return Scaffold(
+      backgroundColor: const Color(0xFF000B8C),
       body: Center(
-        child: Image(
-          image: AssetImage('assets/images/logo.png'),
-          height: 220,
+        child: Image.asset(
+          'assets/images/logo.png',
+          height: logoHeight,
           fit: BoxFit.contain,
         ),
       ),

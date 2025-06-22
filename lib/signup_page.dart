@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -56,8 +56,8 @@ class _SignUpPageState extends State<SignUpPage> {
           'email': email,
           'firstName': firstName,
           'lastName': lastName,
-          'profileImageUrl':
-              '', // You can add a default or let users update later
+          'username': '$firstName $lastName',
+          'profileImageUrl': '',
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -88,19 +88,24 @@ class _SignUpPageState extends State<SignUpPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+    final horizontalPadding = isMobile ? 20.0 : screenWidth * 0.20;
+    final logoHeight = isMobile ? 140.0 : 180.0;
+
     return Scaffold(
       backgroundColor: const Color(0xFF000B8C),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 450),
               child: Form(
                 key: _formKey,
                 child: Column(
                   children: [
-                    Image.asset('assets/images/logo.png', height: 180),
+                    Image.asset('assets/images/logo.png', height: logoHeight),
                     const SizedBox(height: 30),
                     _buildTextField(_firstNameController, "First Name",
                         Icons.person, "Please enter your first name"),
@@ -117,7 +122,7 @@ class _SignUpPageState extends State<SignUpPage> {
                     _isLoading
                         ? const CircularProgressIndicator()
                         : SizedBox(
-                            width: double.infinity, // full width like container
+                            width: double.infinity,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green,
@@ -151,7 +156,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.none, // no underline
+                              decoration: TextDecoration.none,
                             ),
                           ),
                         )

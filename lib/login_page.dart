@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_page.dart';
-import 'home_page.dart'; // Import the HomePage
+import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -46,7 +46,6 @@ class _LoginPageState extends State<LoginPage> {
         const SnackBar(content: Text('Login successful!')),
       );
 
-      // Navigate to HomePage and remove login from the stack
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
@@ -73,65 +72,77 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    // Responsive constraints
     final isMobile = screenWidth < 600;
+    final horizontalPadding = isMobile ? 20.0 : screenWidth * 0.20;
+    final logoHeight = isMobile ? 160.0 : 220.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFF000B8C),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 450),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Image.asset('assets/images/logo.png',
-                      height: isMobile ? 180 : 220),
-                  const SizedBox(height: 30),
-                  TextField(
-                    controller: _emailController,
-                    decoration: _inputDecoration("Email Address", Icons.email),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 15),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: _inputDecoration(
-                      "Password",
-                      Icons.lock,
-                      suffix: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Card(
+                elevation: isMobile ? 0 : 7,
+                color: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Image.asset('assets/images/logo.png', height: logoHeight),
+                      const SizedBox(height: 34),
+                      TextField(
+                        controller: _emailController,
+                        decoration:
+                            _inputDecoration("Email Address", Icons.email),
+                        keyboardType: TextInputType.emailAddress,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: _login,
-                          child: const Text(
-                            "Login",
-                            style: TextStyle(fontSize: 16, color: Colors.white),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: _inputDecoration(
+                          "Password",
+                          Icons.lock,
+                          suffix: IconButton(
+                            icon: Icon(_obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
                           ),
                         ),
-                  const SizedBox(height: 20),
-                  _signUpRedirect(),
-                ],
+                      ),
+                      const SizedBox(height: 10),
+                      _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: _login,
+                              child: const Text(
+                                "Login",
+                                style: TextStyle(
+                                    fontSize: 16, color: Colors.white),
+                              ),
+                            ),
+                      const SizedBox(height: 20),
+                      _signUpRedirect(isMobile),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -149,28 +160,27 @@ class _LoginPageState extends State<LoginPage> {
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
     );
   }
 
-  Widget _signUpRedirect() {
+  Widget _signUpRedirect(bool isMobile) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Text("Don't have an account? ",
             style: TextStyle(color: Colors.white70)),
         GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SignUpPage()),
-            );
-          },
-          child: const Text(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SignUpPage()),
+          ),
+          child: Text(
             "Sign Up",
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
-              // No underline here
+              decoration: isMobile ? TextDecoration.underline : null,
             ),
           ),
         )
